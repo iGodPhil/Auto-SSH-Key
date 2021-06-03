@@ -60,9 +60,10 @@ add_ssh_only_schluessel(){
 }
 
 add_ssh_keymanager(){
-  touch $HOME/add_ssh_keymanager
-  chmod +x $HOME/add_ssh_keymanager
-  echo "#!/usr/bin/expect -f
+  touch /tmp/.add_ssh_keymanager
+  chmod +x /tmp/.add_ssh_keymanager
+  cat <<-EOF > /tmp/.add_ssh_keymanager
+  #!/usr/bin/expect -f
   #
   # Install SSH KEY to KEYMANAGER with no passphrase
   #
@@ -70,8 +71,10 @@ add_ssh_keymanager(){
   spawn ssh-add /$HOME/.ssh/${servername}_rsa
   expect "Enter passphrase for $HOME/.ssh/${servername}_rsa:"
   send "${passwort_sshkey}\n";
-  exit 0" > $HOME/add_ssh_keymanager
-  ./$HOME/add_ssh_keymanager
+  exit 0
+  EOF
+
+  ./tmp/.add_ssh_keymanager
 }
 #erstellt den SSH-Schlüssel, speichert ihn auf dem Server und im SSH-Schlüsselmanager
 #passt die Recht der nötigen Verzeichnisse an
