@@ -11,9 +11,12 @@ ROT='\033[31m'
 RESET='\033[00m'
 
 #Formatierung für neuen Absatz einfügen
-
 absatz(){
-
+  echo -e
+  echo -e
+  echo "${FETT}#############################################################################${RESET}"
+  echo -e
+  echo -e
 }
 
 #globale Variablen
@@ -27,6 +30,7 @@ passwort_sshkey=''
 servername=''
 ip_adresse=''
 abfrage_eingabe=''
+dir=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 
 #kopiert denn SSH-Schlüssel auf den Server
 ssh_copy_id(){
@@ -76,6 +80,7 @@ add_ssh_keymanager(){
 
   ./tmp/.add_ssh_keymanager
 }
+
 #erstellt den SSH-Schlüssel, speichert ihn auf dem Server und im SSH-Schlüsselmanager
 #passt die Recht der nötigen Verzeichnisse an
 add_ssh_schluessel(){
@@ -106,11 +111,12 @@ add_ssh_schluessel(){
                                           echo $passwort_serveruser | sudo -S echo "AllowGroups ssh-user" >> /etc/ssh/sshd_config;\
                                           echo $passwort_serveruser | sudo -S groupadd ssh-user;\
                                           echo $passwort_serveruser | sudo -S usermod -aG ssh-user $username_server;\
+                                          echo $passwort_serveruser | sudo -S service sshd restart;\
                                           exit"
     echo -e "Ab sofort können sich nur noch User auf deinem Server der Gruppe ssh-user anmelden. $username_server wurde automatisch zur Gruppe hinzugefügt."
     echo -e "${FETT}Möchtest du weitere User zur Gruppe ssh-user hinzufügen? (y|n)${RESET}"
     read -rp "Eingabe: " abfrage_eingabe
-    while [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|YES) ]]; do
+    while [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; do
       read -rp "Username: " eingabe_username
       ssh $username_server@$ip_adresse -t " echo $passwort_serveruser | sudo -S usermod -aG ssh-user $eingabe_username;\
                                             exit"
@@ -122,7 +128,7 @@ add_ssh_schluessel(){
     echo -e
     echo -e "${FETT}Möchtest du dich zukünftig nur noch mit einem öffentlichen Schlüssel anmelden können? (y|n)${RESET}"
     read -rp "Eingabe: " abfrage_eingabe
-    if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|YES) ]]; then
+    if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
       add_ssh_only_schluessel
     fi
 
@@ -150,7 +156,7 @@ add_ssh_datei(){
   echo -e
   echo -e "${FETT}Möchtest du einen Schnellzugriff auf deinem Server anlegen? (y|n)${RESET}"
   read -rp "Eingabe: " abfrage_eingabe
-  if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|YES) ]]; then
+  if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
     echo -e
     echo -e "${FETT}Wo möchtest du den Schnellzugriff ablegen?${RESET}"
     read -rpt "Gib den kompletten Pfad an: " pfad
@@ -160,7 +166,7 @@ add_ssh_datei(){
     echo -e
     echo "${FETT}Möchtest du dein System bei Einwahl automatisch updaten? (y|n)${RESET}"
     read -rp "Eingabe: "
-    if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|YES) ]]; then
+    if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
       add_login_update
     fi
   fi
@@ -238,7 +244,7 @@ main(){
   echo -e "Dein lokaler Username: $username"
   echo -e "${FETT}${ROT}Möchtest du deine Passwörter im Klartext anzeigen lassen? (y|n)${RESET}"
   read -rp "Eingabe: " abfrage_eingabe
-  if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|YES) ]]; then
+  if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
     echo -e "Dein lokales Passwort: $passwort_user"
     echo -e "Dein Server Passwort: $passwort_serveruser"
   fi
@@ -247,7 +253,7 @@ main(){
   read -rp "Eingabe: " abfrage_eingabe
 
   #Einrichtung der gewünschten Sachen
-  if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|YES) ]]; then
+  if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
     add_ssh_schluessel
     add_ssh_datei
   else
@@ -266,15 +272,28 @@ main(){
   #Ende
   echo -e
   echo -e "Wir sind jetzt fertig. Ab jetzt kannst du dich sicher ohne Passwort auf deinem Server anmelden."
-  echo -e "Das Logfile für den Einrichtungsprozess findest du im Ordner deines Skripts."
+  echo -e "Das Logfile für den Einrichtungsprozess findest du im log-Ordner deines Skripts."
   echo -e "Ciao..."
 
-  exit 0
+  if [[ "$betriebssystem" = "macos" ]]; then
+    mv /${dir}/logfiles/log.out /${dir}/logfiles/ssh_einrichtung_$servername_$(date -j -f %d_%m_%Y-%H_%M_%S).log
+  elif [[ "$betriebssystem" = "linux" ]]; then
+    mv /${dir}/logfiles/log.out /${dir}/logfiles/ssh_einrichtung_$servername_$(date -Is).log
+  else
+    echo "Windows ist noch nicht fertig."
+  fi
 }
 
 log(){
-  main > /dev/stdout
+  mkdir /${dir}/logfiles
+  exec 3>&1 4>&2
+  trap 'exec 2>&4 1>&3' 0 1 2 3
+  exec 1>/${dir}/logfiles/log.out 2>&1
+  # Everything below will go to the file 'log.out':
+  echo "$(main)" >&3
 }
 
 #Aufruf des Programms
-log > ssh_einrichtung_$servername_$(date -Is).log
+log
+
+exit 0
