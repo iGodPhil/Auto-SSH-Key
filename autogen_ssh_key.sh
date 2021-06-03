@@ -48,9 +48,8 @@ ssh_copy_id(){
       "continue" { send "yes\n"; exp_continue }
       "assword:" { send "${passwort_serveruser}\n"; }
   }
-  exit 0 EOF
-
-  EOF
+  exit 0
+EOF
 
   ./tmp/.ssh_copy_id
 }
@@ -77,7 +76,7 @@ add_ssh_keymanager(){
   expect "Enter passphrase for $HOME/.ssh/${servername}_rsa:"
   send "${passwort_sshkey}\n";
   exit 0
-  EOF
+EOF
 
   ./tmp/.add_ssh_keymanager
 }
