@@ -36,19 +36,19 @@ dir=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 ssh_copy_id(){
   touch /tmp/.ssh_copy_id
   chmod +x /tmp/.ssh_copy_id
-  cat <<-EOF > /tmp/.ssh_copy_id
-  #!/usr/bin/expect -f
-  #
-  # Install RSA SSH KEY with no passphrase
-  #
+  cat > /tmp/.ssh_copy_id <<-EOF
+    #!/usr/bin/expect -f
+    #
+    # Install RSA SSH KEY with no passphrase
+    #
 
-  set timeout 30
-  spawn ssh-copy-id -i $HOME/.ssh/${servername}_rsa.pub $username_server@$ip_adresse
-  expect {
-      "continue" { send "yes\n"; exp_continue }
-      "assword:" { send "${passwort_serveruser}\n"; }
-  }
-  exit 0
+    set timeout 30
+    spawn ssh-copy-id -i $HOME/.ssh/${servername}_rsa.pub $username_server@$ip_adresse
+    expect {
+        "continue" { send "yes\n"; exp_continue }
+        "assword:" { send "${passwort_serveruser}\n"; }
+    }
+    exit 0
   EOF
 
   ./tmp/.ssh_copy_id
@@ -66,16 +66,16 @@ add_ssh_only_schluessel(){
 add_ssh_keymanager(){
   touch /tmp/.add_ssh_keymanager
   chmod +x /tmp/.add_ssh_keymanager
-  cat <<-EOF > /tmp/.add_ssh_keymanager
-  #!/usr/bin/expect -f
-  #
-  # Install SSH KEY to KEYMANAGER with no passphrase
-  #
+  cat > /tmp/.add_ssh_keymanager <<-EOF
+    #!/usr/bin/expect -f
+    #
+    # Install SSH KEY to KEYMANAGER with no passphrase
+    #
 
-  spawn ssh-add /$HOME/.ssh/${servername}_rsa
-  expect "Enter passphrase for $HOME/.ssh/${servername}_rsa:"
-  send "${passwort_sshkey}\n";
-  exit 0
+    spawn ssh-add /$HOME/.ssh/${servername}_rsa
+    expect "Enter passphrase for $HOME/.ssh/${servername}_rsa:"
+    send "${passwort_sshkey}\n";
+    exit 0
   EOF
 
   ./tmp/.add_ssh_keymanager
@@ -297,7 +297,3 @@ log(){
 log
 
 exit 0
-<<<<<<< HEAD
-=======
-bla
->>>>>>> 96c0e14e107558c7dc2b11bee1cf50842e208574
