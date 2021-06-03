@@ -34,9 +34,9 @@ dir=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 
 #kopiert denn SSH-Schlüssel auf den Server
 ssh_copy_id(){
-  touch /tmp/.ssh_copy_id
-  chmod +x /tmp/.ssh_copy_id
-  cat <<-EOF > /tmp/.ssh_copy_id
+  touch ${dir}/ssh_copy_id.exp
+  chmod u+x ${dir}/ssh_copy_id.exp
+  cat <<-EOF > ${dir}/ssh_copy_id.exp
   #!/usr/bin/expect -f
   #
   # Install RSA SSH KEY with no passphrase
@@ -46,13 +46,14 @@ ssh_copy_id(){
   spawn ssh-copy-id -i $HOME/.ssh/${servername}_rsa.pub $username_server@$ip_adresse
   expect {
       "continue" { send "yes\n"; exp_continue }
-      "assword:" { send "${passwort_serveruser}\n"; }
+      "[Pp]ass*:" { send "${passwort_serveruser}\n"; }
   }
   exit 0
 EOF
 
-  ./tmp/.ssh_copy_id
-  rm /tmp/.ssh_copy_id
+  sleep 2
+  .${dir}/ssh_copy_id.exp
+  #rm ${dir}/ssh_copy_id
 }
 
 #nur per SSH-Schlüssel Login ermöglichen
@@ -65,22 +66,24 @@ add_ssh_only_schluessel(){
 }
 
 add_ssh_keymanager(){
-  touch /tmp/.add_ssh_keymanager
-  chmod +x /tmp/.add_ssh_keymanager
-  cat <<-EOF > /tmp/.add_ssh_keymanager
+  touch ${dir}/add_ssh_keymanager.exp
+  chmod u+x ${dir}/add_ssh_keymanager.exp
+  cat <<-EOF > ${dir}/add_ssh_keymanager.exp
   #!/usr/bin/expect -f
   #
   # Install SSH KEY to KEYMANAGER with no passphrase
   #
 
   spawn ssh-add /$HOME/.ssh/${servername}_rsa
-  expect "Enter passphrase for $HOME/.ssh/${servername}_rsa:"
+#  expect "Enter passphrase for $HOME/.ssh/${servername}_rsa:"
+  expect "Enter passphrase for*"
   send "${passwort_sshkey}\n";
   exit 0
 EOF
 
-  ./tmp/.add_ssh_keymanager
-  rm /tmp/.add_ssh_keymanager
+  sleep 2
+  .${dir}/add_ssh_keymanager.exp
+  #rm ${dir}/add_ssh_keymanager
 }
 
 #erstellt den SSH-Schlüssel, speichert ihn auf dem Server und im SSH-Schlüsselmanager
@@ -101,8 +104,8 @@ add_ssh_schluessel(){
     ls -l $HOME/.ssh/ | grep .pub
     echo -e
     echo -e "Der private Schlüssel wird nun im SSH-Schlüsselmanager gespeichert..."
-    echo $passwort_user | sudo -S eval "$(ssh-agent -s)"
-    ssh-add $HOME/.ssh/${servername}_rsa
+    #ssh-add $HOME/.ssh/${servername}_rsa
+    add_ssh_keymanager
     echo -e
     ssh_copy_id
     echo -e "Wir melden uns jetzt auf dem Server an und passen die sshd_config Datei an, um die SSH-Einwahl am Server abzusichern..."
@@ -267,7 +270,7 @@ main(){
       echo -e "${FETT}Welchen Punkt möchtest du überarbeiten? (1-7 | 0 zum beenden)${RESET}"
       read -rp "Eingabe: " abfrage_eingabe
       if (( ${abfrage_eingabe} )); then
-        eingabe_basis ${abfrage_eingabe}
+        eingabe_basisdaten ${abfrage_eingabe}
       fi
     done
     add_ssh_schluessel
@@ -281,19 +284,19 @@ main(){
   echo -e "Ciao..."
 
   if [[ "${betriebssystem}" = "macos" ]]; then
-    mv /${dir}/logfiles/log.out /${dir}/logfiles/ssh_einrichtung_${servername}_$(date -j -f %d_%m_%Y-%H_%M_%S).log
+    mv ${dir}/logfiles/log.out ${dir}/logfiles/ssh_einrichtung_${servername}_$(date -j -f %d_%m_%Y-%H_%M_%S).log
   elif [[ "$betriebssystem" = "linux" ]]; then
-    mv /${dir}/logfiles/log.out /${dir}/logfiles/ssh_einrichtung_${servername}_$(date -Is).log
+    mv ${dir}/logfiles/log.out ${dir}/logfiles/ssh_einrichtung_${servername}_$(date -Is).log
   else
     echo "Windows ist noch nicht fertig."
   fi
 }
 
 log(){
-  mkdir /${dir}/logfiles > /dev/null 2>&1
+  mkdir ${dir}/logfiles > /dev/null 2>&1
   #exec 3>&1 4>&2
   #trap 'exec 2>&4 1>&3' 0 1 2 3
-  #exec 1>/${dir}/logfiles/log.out 2>&1
+  #exec 1>${dir}/logfiles/log.out 2>&1
   # Everything below will go to the file 'log.out':
   #echo -e "$(main)" >&3
   main #>&3
