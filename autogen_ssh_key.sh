@@ -48,7 +48,8 @@ ssh_copy_id(){
       "continue" { send "yes\n"; exp_continue }
       "assword:" { send "${passwort_serveruser}\n"; }
   }
-  exit 0
+  exit 0 EOF
+
   EOF
 
   ./tmp/.ssh_copy_id
