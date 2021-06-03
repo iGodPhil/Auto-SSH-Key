@@ -52,6 +52,7 @@ ssh_copy_id(){
 EOF
 
   ./tmp/.ssh_copy_id
+  rm /tmp/.ssh_copy_id
 }
 
 #nur per SSH-Schlüssel Login ermöglichen
@@ -79,12 +80,14 @@ add_ssh_keymanager(){
 EOF
 
   ./tmp/.add_ssh_keymanager
+  rm /tmp/.add_ssh_keymanager
 }
 
 #erstellt den SSH-Schlüssel, speichert ihn auf dem Server und im SSH-Schlüsselmanager
 #passt die Recht der nötigen Verzeichnisse an
 add_ssh_schluessel(){
 	if [[ "$betriebssystem" =~ (macos|linux) ]]; then
+    absatz
 		echo $passwort_user | sudo -S chmod 755 $HOME/.ssh
     echo -e
     echo -e "Wir erstellen jetzt das SSH-Schlüsselpaar..."
@@ -236,15 +239,17 @@ main(){
 
   #Überprüfung ob der User alle Daten richtig eingegeben hat
   echo -e
-  echo -e "Überprüfe bitte alle Daten bevor es weitergeht:"
+  echo -e "${FETT}Überprüfe bitte alle Daten bevor es weitergeht:${RESET}"
   echo -e "IP-Adresse: $ip_adresse"
   echo -e "Servername: $servername"
   echo -e "Username auf dem Server: $username_server"
   echo -e "Betriebssystem: $betriebssystem"
   echo -e "Dein lokaler Username: $username"
+  echo -e
   echo -e "${FETT}${ROT}Möchtest du deine Passwörter im Klartext anzeigen lassen? (y|n)${RESET}"
   read -rp "Eingabe: " abfrage_eingabe
   if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
+    echo -e
     echo -e "Dein lokales Passwort: $passwort_user"
     echo -e "Dein Server Passwort: $passwort_serveruser"
   fi
@@ -258,11 +263,11 @@ main(){
     add_ssh_datei
   else
     abfrage_eingabe=1
-    while (( $abfrage_eingabe )); do
+    while (( ${abfrage_eingabe} )); do
       echo -e "${FETT}Welchen Punkt möchtest du überarbeiten? (1-7 | 0 zum beenden)${RESET}"
       read -rp "Eingabe: " abfrage_eingabe
-      if (( $abfrage_eingabe )); then
-        eingabe_basis $abfrage_eingabe
+      if (( ${abfrage_eingabe} )); then
+        eingabe_basis ${abfrage_eingabe}
       fi
     done
     add_ssh_schluessel
@@ -275,10 +280,10 @@ main(){
   echo -e "Das Logfile für den Einrichtungsprozess findest du im log-Ordner deines Skripts."
   echo -e "Ciao..."
 
-  if [[ "$betriebssystem" = "macos" ]]; then
-    mv /${dir}/logfiles/log.out /${dir}/logfiles/ssh_einrichtung_$servername_$(date -j -f %d_%m_%Y-%H_%M_%S).log
+  if [[ "${betriebssystem}" = "macos" ]]; then
+    mv /${dir}/logfiles/log.out /${dir}/logfiles/ssh_einrichtung_${servername}_$(date -j -f %d_%m_%Y-%H_%M_%S).log
   elif [[ "$betriebssystem" = "linux" ]]; then
-    mv /${dir}/logfiles/log.out /${dir}/logfiles/ssh_einrichtung_$servername_$(date -Is).log
+    mv /${dir}/logfiles/log.out /${dir}/logfiles/ssh_einrichtung_${servername}_$(date -Is).log
   else
     echo "Windows ist noch nicht fertig."
   fi
@@ -286,11 +291,12 @@ main(){
 
 log(){
   mkdir /${dir}/logfiles > /dev/null 2>&1
-  exec 3>&1 4>&2
-  trap 'exec 2>&4 1>&3' 0 1 2 3
-  exec 1>/${dir}/logfiles/log.out 2>&1
+  #exec 3>&1 4>&2
+  #trap 'exec 2>&4 1>&3' 0 1 2 3
+  #exec 1>/${dir}/logfiles/log.out 2>&1
   # Everything below will go to the file 'log.out':
-  main >&3
+  #echo -e "$(main)" >&3
+  main #>&3
 }
 
 #Aufruf des Programms
