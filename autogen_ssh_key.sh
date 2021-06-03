@@ -14,7 +14,7 @@ RESET='\033[00m'
 absatz(){
   echo -e
   echo -e
-  echo "${FETT}#############################################################################${RESET}"
+  echo -e "${FETT}#############################################################################${RESET}"
   echo -e
   echo -e
 }
@@ -186,8 +186,8 @@ eingabe_basisdaten(){
 
 #Hauptprogramm
 main(){
-  echo -e
-  echo -e "Das Skript erstellt ein neues SSH-Schlüsselpaar, damit du dichzukünftig ohne Passwort auf deinem Server anmelden kannst."
+  absatz
+  echo -e "Das Skript erstellt ein neues SSH-Schlüsselpaar, damit du dich zukünftig ohne Passwort auf deinem Server anmelden kannst."
   echo -e "Das Passwort für den SSH-Schlüssel wird im SSH-Schlüsselmanager gespeichert."
   echo -e "Auf Wunsch wird ein Schnellzugriff auf deinen Server erstellt."
   echo -e "Die Ausgaben des Skripts werden in einem Logfile gespeichert."
@@ -285,12 +285,12 @@ main(){
 }
 
 log(){
-  mkdir /${dir}/logfiles
+  mkdir /${dir}/logfiles > /dev/null 2>&1
   exec 3>&1 4>&2
   trap 'exec 2>&4 1>&3' 0 1 2 3
   exec 1>/${dir}/logfiles/log.out 2>&1
   # Everything below will go to the file 'log.out':
-  echo "$(main)" >&3
+  main >&3
 }
 
 #Aufruf des Programms
