@@ -33,27 +33,13 @@ abfrage_eingabe=''
 dir=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 
 #kopiert denn SSH-Schlüssel auf den Server
+
 ssh_copy_id(){
-  touch ${dir}/ssh_copy_id.exp
-  chmod u+x ${dir}/ssh_copy_id.exp
-  cat <<-EOF > ${dir}/ssh_copy_id.exp
-  #!/usr/bin/expect -f
-  #
-  # Install RSA SSH KEY with no passphrase
-  #
-
-  set timeout 30
+  expect <<-EOF
   spawn ssh-copy-id -i $HOME/.ssh/${servername}_rsa.pub $username_server@$ip_adresse
-  expect {
-      "continue" { send "yes\n"; exp_continue }
-      "[Pp]ass*:" { send "${passwort_serveruser}\n"; }
-  }
-  exit 0
+  expect "*assword:"
+  send "${passwort_serveruser}\n"
 EOF
-
-  sleep 2
-  .${dir}/ssh_copy_id.exp
-  #rm ${dir}/ssh_copy_id
 }
 
 #nur per SSH-Schlüssel Login ermöglichen
@@ -66,24 +52,11 @@ add_ssh_only_schluessel(){
 }
 
 add_ssh_keymanager(){
-  touch ${dir}/add_ssh_keymanager.exp
-  chmod u+x ${dir}/add_ssh_keymanager.exp
-  cat <<-EOF > ${dir}/add_ssh_keymanager.exp
-  #!/usr/bin/expect -f
-  #
-  # Install SSH KEY to KEYMANAGER with no passphrase
-  #
-
+  expect <<-EOF
   spawn ssh-add /$HOME/.ssh/${servername}_rsa
-#  expect "Enter passphrase for $HOME/.ssh/${servername}_rsa:"
   expect "Enter passphrase for*"
-  send "${passwort_sshkey}\n";
-  exit 0
+  send "${passwort_sshkey}\n"
 EOF
-
-  sleep 2
-  .${dir}/add_ssh_keymanager.exp
-  #rm ${dir}/add_ssh_keymanager
 }
 
 #erstellt den SSH-Schlüssel, speichert ihn auf dem Server und im SSH-Schlüsselmanager
