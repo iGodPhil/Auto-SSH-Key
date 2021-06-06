@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #Dieses Skript erstellt auf Wunsch ein neues SSH Schlüsselpaar
 #das Passwort wird automatisch im SSH Schlüsselmanager gespeichert
@@ -32,36 +32,48 @@ ip_adresse=''
 abfrage_eingabe=''
 dir=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 
+##############################################################################################################################
+
+#SSH Funktionen auf dem Client
+
+##############################################################################################################################
+
+#speichert das Passwort des SSH-Schlüssels im SSH-Manager
+function add_ssh_keymanager(){
+
+  expect <<- EOF
+    spawn ssh-add $HOME/.ssh/${servername}_rsa
+    expect "Enter passphrase for*"
+    send "${passwort_sshkey}\r"
+    expect eof
+EOF
+}
+
+#Zeigt alle geispeicherten SSH-Schlüsselpasswörter des SSH-Managers an
+function show_ssh_add_keys(){
+
+  while read -r line; do
+      for file in $HOME/.ssh/*.pub; do
+          printf "%s %s\n" "$(ssh-keygen -lf "$file" | awk '{$1=""}1')" "$file";
+      done | column -t | grep --color=auto "$line" || echo "$line";
+  done < <(ssh-add -l | awk '{print $2}')
+  sleep 5
+}
+
 #kopiert denn SSH-Schlüssel auf den Server
-
-ssh_copy_id(){
-  expect <<-EOF
-  spawn ssh-copy-id -i $HOME/.ssh/${servername}_rsa.pub $username_server@$ip_adresse
-  expect "*assword:"
-  send "${passwort_serveruser}\n"
+function ssh_copy_id(){
+  expect <<- EOF
+    spawn ssh-copy-id -i $HOME/.ssh/${servername}_rsa.pub ${username_server}@${ip_adresse}
+    expect "*assword:"
+    send "${passwort_serveruser}\r"
+    expect eof
 EOF
-}
-
-#nur per SSH-Schlüssel Login ermöglichen
-add_ssh_only_schluessel(){
-  echo -e "Wir verbinden uns wieder mit dem Server und passen erneut die sshd_config Datei an."
-  ssh $username_server@$ip_adresse -t " echo $passwort_serveruser | sudo -S sed -i "s/.*PasswordAuthentication.*/PasswordAuthentication no/" /etc/ssh/sshd_config;\
-                                        echo $passwort_serveruser | sudo -S sed -i "s/.*ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/" /etc/ssh/sshd_config;\
-                                        echo $passwort_serveruser | sudo -S sed -i "s/.*UsePAM.*/UsePAM no/" /etc/ssh/sshd_config;\
-                                        exit"
-}
-
-add_ssh_keymanager(){
-  expect <<-EOF
-  spawn ssh-add /$HOME/.ssh/${servername}_rsa
-  expect "Enter passphrase for*"
-  send "${passwort_sshkey}\n"
-EOF
+  sleep 5
 }
 
 #erstellt den SSH-Schlüssel, speichert ihn auf dem Server und im SSH-Schlüsselmanager
 #passt die Recht der nötigen Verzeichnisse an
-add_ssh_schluessel(){
+function add_ssh_schluessel(){
 	if [[ "$betriebssystem" =~ (macos|linux) ]]; then
     absatz
 		echo $passwort_user | sudo -S chmod 755 $HOME/.ssh
@@ -70,28 +82,46 @@ add_ssh_schluessel(){
 		echo -e "${FETT}Wie soll das Passwort für den SSH-Key lauten?${RESET}"
     read -srp "Eingabe: " passwort_sshkey
     echo -e
+    echo -e
+
+
     ssh-keygen -b 4096 -N $passwort_sshkey -f $HOME/.ssh/${servername}_rsa
     echo -e
     echo -e "Du besitzt bisher folgende SSH-Schlüssel:"
     echo -e
     ls -l $HOME/.ssh/ | grep .pub
     echo -e
+
+
     echo -e "Der private Schlüssel wird nun im SSH-Schlüsselmanager gespeichert..."
-    #ssh-add $HOME/.ssh/${servername}_rsa
     add_ssh_keymanager
     echo -e
+    echo -e
+
+
+    echo -e "Du hast bisher folgende Schlüssel im SSH-Manager gespeichert:"
+    echo -e
+    show_ssh_add_keys
+    echo -e
+    sleep 5
+
+
+    echo -e "Der öffentliche Schlüssel wird jetzt auf den Server kopiert..."
     ssh_copy_id
+
+    absatz
+
     echo -e "Wir melden uns jetzt auf dem Server an und passen die sshd_config Datei an, um die SSH-Einwahl am Server abzusichern..."
-    ssh $username_server@$ip_adresse -t " echo $passwort_serveruser | sudo -S sed -i "s/.*PubkeyAuthentication.*/PubkeyAuthentication yes/" /etc/ssh/sshd_config;\
-                                          echo $passwort_serveruser | sudo -S sed -i "s/.*LoginGraceTime.*/LoginGraceTime 5m/" /etc/ssh/sshd_config;\
-                                          echo $passwort_serveruser | sudo -S sed -i "s/.*MaxAuthTries.*/MaxAuthTries 10/" /etc/ssh/sshd_config;\
-                                          echo $passwort_serveruser | sudo -S echo " " >> /etc/ssh/sshd_config;\
-                                          echo $passwort_serveruser | sudo -S echo "\# Only allow SSH for users member of group ssh-user" >> /etc/ssh/sshd_config;\
-                                          echo $passwort_serveruser | sudo -S echo "AllowGroups ssh-user" >> /etc/ssh/sshd_config;\
-                                          echo $passwort_serveruser | sudo -S groupadd ssh-user;\
-                                          echo $passwort_serveruser | sudo -S usermod -aG ssh-user $username_server;\
-                                          echo $passwort_serveruser | sudo -S service sshd restart;\
-                                          exit"
+    ssh $username_server@$ip_adresse -t ' echo -e "$passwort_serveruser" | sudo -S sed -i "s/.*PubkeyAuthentication.*/PubkeyAuthentication yes/" /etc/ssh/sshd_config;\
+                                          echo -e "$passwort_serveruser" | sudo -S sed -i "s/.*LoginGraceTime.*/LoginGraceTime 5m/" /etc/ssh/sshd_config;\
+                                          echo -e "$passwort_serveruser" | sudo -S sed -i "s/.*MaxAuthTries.*/MaxAuthTries 10/" /etc/ssh/sshd_config;\
+                                          echo -e "$passwort_serveruser" | sudo -S echo "" >> /etc/ssh/sshd_config;\
+                                          echo -e "$passwort_serveruser" | sudo -S echo "\# Only allow SSH for users member of group ssh-user" >> /etc/ssh/sshd_config;\
+                                          echo -e "$passwort_serveruser" | sudo -S echo "AllowGroups ssh-user" >> /etc/ssh/sshd_config;\
+                                          echo -e "$passwort_serveruser" | sudo -S groupadd ssh-user;\
+                                          echo -e "$passwort_serveruser" | sudo -S usermod -aG ssh-user $username_server;\
+                                          echo -e "$passwort_serveruser" | sudo -S service sshd restart;\
+                                          exit'
     echo -e "Ab sofort können sich nur noch User auf deinem Server der Gruppe ssh-user anmelden. $username_server wurde automatisch zur Gruppe hinzugefügt."
     echo -e "${FETT}Möchtest du weitere User zur Gruppe ssh-user hinzufügen? (y|n)${RESET}"
     read -rp "Eingabe: " abfrage_eingabe
@@ -117,8 +147,42 @@ add_ssh_schluessel(){
 	fi
 }
 
-#bei login update ermöglichen
-add_login_update(){
+##############################################################################################################################
+
+#SSH Funktionen auf dem Server
+
+##############################################################################################################################
+
+#nur per SSH-Schlüssel Login ermöglichen
+function add_ssh_only_schluessel(){
+
+  #Anpassen
+  ssh $username_server@$ip_adresse bash -s <<-EOF
+    echo "Los gehts"
+    echo "$passwort_serveruser" | sudo -S sed -i 's/.*PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+    echo -e
+    echo "weiter gehts..."
+    echo "$passwort_serveruser" | sudo -S sed -i '\$aAllowGroups ssh-user' /etc/ssh/sshd_config
+EOF
+
+
+  #Entfernen
+  echo -e "Wir verbinden uns wieder mit dem Server und passen erneut die sshd_config Datei an."
+  ssh $username_server@$ip_adresse -t " echo $passwort_serveruser | sudo -S sed -i "s/.*PasswordAuthentication.*/PasswordAuthentication no/" /etc/ssh/sshd_config;\
+                                        echo $passwort_serveruser | sudo -S sed -i "s/.*ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/" /etc/ssh/sshd_config;\
+                                        echo $passwort_serveruser | sudo -S sed -i "s/.*UsePAM.*/UsePAM no/" /etc/ssh/sshd_config;\
+                                        echo $passwort_serveruser | sudo -S service sshd restart;\
+                                        exit"
+}
+
+##############################################################################################################################
+
+#SSH Zusatzfunktionen auf dem Client
+
+##############################################################################################################################
+
+#bei login Update ermöglichen
+function add_login_update(){
   ssh $username_server@$ip_adresse -t " echo $passwort_serveruser | sudo -S touch /etc/sudoers.d/$username_server;\
                                         echo $passwort_serveruser | sudo -S echo "$username_server ALL=NOPASSWD:/usr/bin/apt update,/usr/bin/apt full-upgrade -y" >> /etc/sudoers.d/$username_server;\
                                         echo $passwort_serveruser | sudo -S chown root:root /etc/sudoers.d/$username_server;\
@@ -131,9 +195,9 @@ add_login_update(){
 
 #erstellt auf Wunsch den SSH Schnellzugriff
 #updatet das System auf Wunsch bei Einwahl
-add_ssh_datei(){
+function add_ssh_datei(){
   echo -e
-  echo -e "${FETT}Möchtest du einen Schnellzugriff auf deinem Server anlegen? (y|n)${RESET}"
+  echo -e "${FETT}Möchtest du einen Schnellzugriff für deinen Server anlegen? (y|n)${RESET}"
   read -rp "Eingabe: " abfrage_eingabe
   if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
     echo -e
@@ -151,7 +215,13 @@ add_ssh_datei(){
   fi
 }
 
-eingabe_basisdaten(){
+##############################################################################################################################
+
+#Hauptprogramm
+
+##############################################################################################################################
+
+function eingabe_basisdaten(){
   case "$*" in
     1)  read -rp "1. IP Adresse des Servers: " ip_adresse ;;
     2)  read -rp "2. Name des Servers: " servername ;;
@@ -164,7 +234,7 @@ eingabe_basisdaten(){
 }
 
 #Hauptprogramm
-main(){
+function main(){
   absatz
   echo -e "Das Skript erstellt ein neues SSH-Schlüsselpaar, damit du dich zukünftig ohne Passwort auf deinem Server anmelden kannst."
   echo -e "Das Passwort für den SSH-Schlüssel wird im SSH-Schlüsselmanager gespeichert."
@@ -172,7 +242,18 @@ main(){
   echo -e "Die Ausgaben des Skripts werden in einem Logfile gespeichert."
   echo -e "${FETT}${ROT}Alle Passwörter die im Klartext angezeigt werden, werden im Logfile zu sehen sein!${RESET}"
   echo -e
-  echo -e "Los gehts. Im ersten Schritt benötige ich folgende Daten von dir:"
+  echo -e "${FETT}${ROT}Dein User auf dem Server muss der Gruppe sudo angehören!${RESET}"
+  echo -e
+  echo -e "Kann es losgehen? (y|n)"
+  read -rp "Eingabe: " abfrage_eingabe
+  if [[ "${abfrage_eingabe}" =~  (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
+    continue > /dev/null 2>&1
+  else
+    echo -e "Ciao bis zum nächsten Mal..."
+    exit 0
+  fi
+  echo -e
+  echo -e "Dann geht's jetzt los. Im ersten Schritt benötige ich folgende Daten von dir:"
   echo -e
 
 
@@ -265,8 +346,8 @@ main(){
   fi
 }
 
-log(){
-  mkdir ${dir}/logfiles > /dev/null 2>&1
+function log(){
+  #mkdir ${dir}/logfiles > /dev/null 2>&1
   #exec 3>&1 4>&2
   #trap 'exec 2>&4 1>&3' 0 1 2 3
   #exec 1>${dir}/logfiles/log.out 2>&1
