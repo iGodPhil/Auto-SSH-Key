@@ -38,13 +38,48 @@ dir=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 
 ##############################################################################################################################
 
+#speichert den Fingerprint des Servers auf dem Client
+function ssh_fingerprint() {
+  expect <<- EOF
+    spawn ssh ${username_server}@${ip_adresse} -t 'exit'
+    expect {
+      "*fingerprint*" {
+        send "yes\r"; exp_continue
+      }
+      "*assword:*" {
+        send "${passwort_serveruser}\r"
+      }
+      eof
+    }
+EOF
+}
+
+#kopiert denn SSH-Schlüssel auf den Server und speichert den Fingerprint auf dem Client
+function ssh_copy_id(){
+  expect <<- EOF
+    spawn ssh-copy-id -i $HOME/.ssh/${servername}_rsa.pub ${username_server}@${ip_adresse}
+    expect {
+      "*assword:*" {
+        send "${passwort_serveruser}\r"
+        exp_continue
+      }
+      eof
+    }
+EOF
+  sleep 5
+}
+
 #speichert das Passwort des SSH-Schlüssels im SSH-Manager
 function add_ssh_keymanager(){
   expect <<- EOF
-    spawn ssh-add $HOME/.ssh/${servername}_rsa
-    expect "Enter passphrase for*"
-    send "${passwort_sshkey}\r"
-    expect eof
+    spawn ssh-add ${HOME}/.ssh/${servername}_rsa
+    expect {
+      "Enter passphrase for*" {
+        send "${passwort_sshkey}\r"
+        exp_continue
+      }
+      eof
+    }
 EOF
 }
 
@@ -55,17 +90,6 @@ function show_ssh_add_keys(){
           printf "%s %s\n" "$(ssh-keygen -lf "$file" | awk '{$1=""}1')" "$file";
       done | column -t | grep --color=auto "$line" || echo "$line";
   done < <(ssh-add -l | awk '{print $2}')
-  sleep 5
-}
-
-#kopiert denn SSH-Schlüssel auf den Server
-function ssh_copy_id(){
-  expect <<- EOF
-    spawn ssh-copy-id -i $HOME/.ssh/${servername}_rsa.pub ${username_server}@${ip_adresse}
-    expect "*assword:"
-    send "${passwort_serveruser}\r"
-    expect eof
-EOF
   sleep 5
 }
 
@@ -110,6 +134,7 @@ function add_ssh_schluessel(){
 
 
     echo -e "Der öffentliche Schlüssel wird jetzt auf den Server kopiert..."
+    ssh_fingerprint
     ssh_copy_id
 
     absatz
@@ -173,6 +198,7 @@ function add_only_ssh_key(){
   echo -e "Wir verbinden uns wieder mit dem Server und passen erneut die sshd_config Datei an."
 
   ssh $username_server@$ip_adresse bash -s <<-EOF
+    echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
     echo "$passwort_serveruser" | sudo -S sed -i 's/.*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S sed -i 's/.*ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S sed -i 's/.*UsePAM.*/UsePAM no/' /etc/ssh/sshd_config
@@ -190,16 +216,18 @@ EOF
 #bei login Update ermöglichen
 function add_login_update(){
   ssh $username_server@$ip_adresse bash -s <<-EOF
-    echo "$passwort_serveruser" | sudo -S touch /etc/sudoers.d/$username_server
-    echo "$passwort_serveruser" | sudo -S sed '\$a$username_server ALL=NOPASSWD:/usr/bin/apt update,/usr/bin/apt full-upgrade -y' /etc/sudoers.d/$username_server
-    echo "$passwort_serveruser" | sudo -S chown root:root /etc/sudoers.d/$username_server
-    echo "$passwort_serveruser" | sudo -S chmod 0440 /etc/sudoers.d/$username_server
+    echo "$passwort_serveruser" | sudo -S touch /etc/sudoers.d/${username_server}
+    echo "$passwort_serveruser" | sudo -S cp /etc/sudoers.d/${username_server} /etc/sudoers.d/${username_server}.bak
+    echo "$passwort_serveruser" | sudo -S sed '/${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y/d' /etc/sudoers.d/${username_server}
+    echo "$passwort_serveruser" | sudo -S sed '\$a${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y' /etc/sudoers.d/${username_server}
+    echo "$passwort_serveruser" | sudo -S chown root:root /etc/sudoers.d/${username_server}
+    echo "$passwort_serveruser" | sudo -S chmod 0440 /etc/sudoers.d/${username_server}
     exit
 EOF
 
-  echo "sudo apt update;\
-        sudo apt full-upgrade -y;\
-        echo;echo;echo;echo;echo" > $pfad/ssh_${servername}.sh
+  echo "sudo apt update
+        sudo apt full-upgrade -y
+        echo;echo;echo;echo;echo" >> ${pfad}/ssh_${servername}.sh
 }
 
 #erstellt auf Wunsch den SSH Schnellzugriff
@@ -209,17 +237,17 @@ function add_ssh_datei(){
   echo -e
   echo -e "${FETT}Möchtest du einen Schnellzugriff für deinen Server anlegen? (y|n)${RESET}"
   read -rp "Eingabe: " abfrage_eingabe
-  if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
+  if [[ "${abfrage_eingabe}" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
     echo -e
     echo -e "${FETT}Wo möchtest du den Schnellzugriff ablegen?${RESET}"
     read -rp "Gib den kompletten Pfad an: " pfad
-    touch $pfad/ssh_${servername}.sh
-    chmod a+x $pfad/ssh_${servername}.sh
-    echo "ssh $servername@$ip_adresse" > $pfad/ssh_${servername}.sh
+    touch ${pfad}/ssh_${servername}.sh
+    chmod a+x ${pfad}/ssh_${servername}.sh
+    echo "ssh ${servername}@${ip_adresse}" > ${pfad}/ssh_${servername}.sh
     echo -e
     echo "${FETT}Möchtest du dein System bei Einwahl automatisch updaten? (y|n)${RESET}"
     read -rp "Eingabe: "
-    if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
+    if [[ "${abfrage_eingabe}" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
       add_login_update
     fi
   fi
@@ -347,6 +375,18 @@ function main(){
   echo -e "Das Logfile für den Einrichtungsprozess findest du im log-Ordner deines Skripts."
   echo -e "Ciao..."
 
+  exit 0
+}
+
+function log(){
+  mkdir ${dir}/logfiles > /dev/null 2>&1
+  exec 3>&1 4>&2
+  trap 'exec 2>&4 1>&3' 0 1 2 3
+  exec 1>${dir}/logfiles/log.out 2>&1
+  # Everything below will go to the file 'log.out':
+  echo -e "$(main)" >&3
+  main >&3
+
   if [[ "${betriebssystem}" = "macos" ]]; then
     mv ${dir}/logfiles/log.out ${dir}/logfiles/ssh_einrichtung_${servername}_$(date -j -f %d_%m_%Y-%H_%M_%S).log
   elif [[ "$betriebssystem" = "linux" ]]; then
@@ -354,19 +394,8 @@ function main(){
   else
     echo "Windows ist noch nicht fertig."
   fi
-
-  exit 0
-}
-
-function log(){
-  #mkdir ${dir}/logfiles > /dev/null 2>&1
-  #exec 3>&1 4>&2
-  #trap 'exec 2>&4 1>&3' 0 1 2 3
-  #exec 1>${dir}/logfiles/log.out 2>&1
-  # Everything below will go to the file 'log.out':
-  #echo -e "$(main)" >&3
-  main #>&3
 }
 
 #Aufruf des Programms
-log
+#log
+main
