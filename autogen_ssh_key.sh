@@ -142,7 +142,7 @@ function add_ssh_schluessel(){
     echo -e "Wir melden uns jetzt auf dem Server an und passen die sshd_config Datei an, um die SSH-Einwahl am Server abzusichern..."
 
     ssh $username_server@$ip_adresse bash -s <<-EOF
-      echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
+      echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
       echo "$passwort_serveruser" | sudo -S sed -i 's/.*PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i 's/.*LoginGraceTime.*/LoginGraceTime 5m/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i 's/.*MaxAuthTries.*/MaxAuthTries 10/' /etc/ssh/sshd_config
@@ -198,7 +198,7 @@ function add_only_ssh_key(){
   echo -e "Wir verbinden uns wieder mit dem Server und passen erneut die sshd_config Datei an."
 
   ssh $username_server@$ip_adresse bash -s <<-EOF
-    echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
+    echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
     echo "$passwort_serveruser" | sudo -S sed -i 's/.*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S sed -i 's/.*ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S sed -i 's/.*UsePAM.*/UsePAM no/' /etc/ssh/sshd_config
