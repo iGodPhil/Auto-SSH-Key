@@ -143,7 +143,7 @@ function add_ssh_schluessel(){
 
     ssh $username_server@$ip_adresse bash -s <<-EOF
       echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
-      echo "$passwort_serveruser" | sudo -S sed -i 's/.*PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+      echo "$passwort_serveruser" | sudo -S sed -i '0,/.*PubkeyAuthentication.*/s//PubkeyAuthentication yes/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i 's/.*LoginGraceTime.*/LoginGraceTime 5m/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i 's/.*MaxAuthTries.*/MaxAuthTries 10/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i '/AllowGroups ssh-user/d' /etc/ssh/sshd_config
@@ -199,9 +199,9 @@ function add_only_ssh_key(){
 
   ssh $username_server@$ip_adresse bash -s <<-EOF
     echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
-    echo "$passwort_serveruser" | sudo -S sed -i 's/.*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-    echo "$passwort_serveruser" | sudo -S sed -i 's/.*ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
-    echo "$passwort_serveruser" | sudo -S sed -i 's/.*UsePAM.*/UsePAM no/' /etc/ssh/sshd_config
+    echo "$passwort_serveruser" | sudo -S sed -i '0,/.*PasswordAuthentication.*/s//PasswordAuthentication no/' /etc/ssh/sshd_config
+    echo "$passwort_serveruser" | sudo -S sed -i '0,/.*ChallengeResponseAuthentication.*/s//ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
+    echo "$passwort_serveruser" | sudo -S sed -i '0,/.*UsePAM.*/s//UsePAM no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S service sshd restart
     exit
 EOF
@@ -216,10 +216,9 @@ EOF
 #bei login Update ermöglichen
 function add_login_update(){
   ssh $username_server@$ip_adresse bash -s <<-EOF
-    echo "$passwort_serveruser" | sudo -S touch /etc/sudoers.d/${username_server}
-    echo "$passwort_serveruser" | sudo -S cp /etc/sudoers.d/${username_server} /etc/sudoers.d/${username_server}_$(date -Is).bak
-    echo "$passwort_serveruser" | sudo -S sed '/${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y/d' /etc/sudoers.d/${username_server}
-    echo "$passwort_serveruser" | sudo -S sed '\$a${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y' /etc/sudoers.d/${username_server}
+    echo "$passwort_serveruser" | sudo -S touch /home/${username_server}/${username_server}_autoupdate
+    echo "$passwort_serveruser" | sudo -S sed '\$a${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y/d' /etc/sudoers.d/${username_server}_autoupdate
+    echo "$passwort_serveruser" | sudo -S sed '\$a${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y' /etc/sudoers.d/${username_server}_autoupdate
     echo "$passwort_serveruser" | sudo -S chown root:root /etc/sudoers.d/${username_server}
     echo "$passwort_serveruser" | sudo -S chmod 0440 /etc/sudoers.d/${username_server}
     exit
@@ -227,7 +226,7 @@ EOF
 
   echo "sudo apt update
         sudo apt full-upgrade -y
-        echo;echo;echo;echo;echo" >> ${pfad}/ssh_${servername}.sh
+        echo;echo;echo;echo;echo" > ${pfad}/ssh_${servername}.sh
 }
 
 #erstellt auf Wunsch den SSH Schnellzugriff
