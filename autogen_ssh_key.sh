@@ -71,16 +71,33 @@ EOF
 
 #speichert das Passwort des SSH-Schlüssels im SSH-Manager
 function add_ssh_keymanager(){
-  expect <<- EOF
-    spawn ssh-add ${HOME}/.ssh/${servername}_rsa
-    expect {
-      "Enter passphrase for*" {
-        send "${passwort_sshkey}\r"
-#        exp_continue
+
+  if [[ "${betriebssystem}" = "macos" ]]; then
+    expect <<- EOF
+      spawn ssh-add -K ${HOME}/.ssh/${servername}_rsa
+      expect {
+        "Enter passphrase for*" {
+          send "${passwort_sshkey}\r"
+          exp_continue
+        }
+        eof
       }
-      eof
-    }
 EOF
+  elif [[ "$betriebssystem" = "linux" ]]; then
+    expect <<- EOF
+      spawn ssh-add ${HOME}/.ssh/${servername}_rsa
+      expect {
+        "Enter passphrase for*" {
+          send "${passwort_sshkey}\r"
+          exp_continue
+        }
+        eof
+      }
+EOF
+  else
+    echo "Windows ist noch nicht fertig."
+  fi
+
 }
 
 #Zeigt alle geispeicherten SSH-Schlüsselpasswörter des SSH-Managers an
@@ -141,13 +158,23 @@ function add_ssh_schluessel(){
 
     echo -e "Wir melden uns jetzt auf dem Server an und passen die sshd_config Datei an, um die SSH-Einwahl am Server abzusichern..."
 
+    if [[ "${betriebssystem}" = "macos" ]]; then
+      ssh $username_server@$ip_adresse bash -s <<-EOF
+        echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -j -f %d_%m_%Y-%H_%M_%S).bak
+        exit
+  EOF
+    elif [[ "$betriebssystem" = "linux" ]]; then
+      ssh $username_server@$ip_adresse bash -s <<-EOF
+        echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
+        exit
+  EOF
+    else
+      echo "Windows ist noch nicht fertig."
+    fi
+
     ssh $username_server@$ip_adresse bash -s <<-EOF
-      echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
-<<<<<<< HEAD
       echo "$passwort_serveruser" | sudo -S sed -i '/.*PubkeyAuthentication.*/c\PubkeyAuthentication yes/' /etc/ssh/sshd_config
-=======
       echo "$passwort_serveruser" | sudo -S sed -i '0,/.*PubkeyAuthentication.*/s//PubkeyAuthentication yes/' /etc/ssh/sshd_config
->>>>>>> b2e2be650e8da2195ee758b66113315a7830e602
       echo "$passwort_serveruser" | sudo -S sed -i 's/.*LoginGraceTime.*/LoginGraceTime 5m/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i 's/.*MaxAuthTries.*/MaxAuthTries 10/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i '/AllowGroups ssh-user/d' /etc/ssh/sshd_config
@@ -201,17 +228,27 @@ EOF
 function add_only_ssh_key(){
   echo -e "Wir verbinden uns wieder mit dem Server und passen erneut die sshd_config Datei an."
 
+  if [[ "${betriebssystem}" = "macos" ]]; then
+    ssh $username_server@$ip_adresse bash -s <<-EOF
+      echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -j -f %d_%m_%Y-%H_%M_%S).bak
+      exit
+EOF
+  elif [[ "$betriebssystem" = "linux" ]]; then
+    ssh $username_server@$ip_adresse bash -s <<-EOF
+      echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
+      exit
+EOF
+  else
+    echo "Windows ist noch nicht fertig."
+  fi
+
   ssh $username_server@$ip_adresse bash -s <<-EOF
-    echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
-<<<<<<< HEAD
     echo "$passwort_serveruser" | sudo -S sed -i '/.*PasswordAuthentication.*/c\PasswordAuthentication no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S sed -i '/.*ChallengeResponseAuthentication.*/c\ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S sed -i '/.*UsePAM.*/c\UsePAM no/' /etc/ssh/sshd_config
-=======
     echo "$passwort_serveruser" | sudo -S sed -i '0,/.*PasswordAuthentication.*/s//PasswordAuthentication no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S sed -i '0,/.*ChallengeResponseAuthentication.*/s//ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S sed -i '0,/.*UsePAM.*/s//UsePAM no/' /etc/ssh/sshd_config
->>>>>>> b2e2be650e8da2195ee758b66113315a7830e602
     echo "$passwort_serveruser" | sudo -S service sshd restart
     exit
 EOF
@@ -226,11 +263,12 @@ EOF
 #bei login Update ermöglichen
 function add_login_update(){
   ssh $username_server@$ip_adresse bash -s <<-EOF
-    echo "$passwort_serveruser" | sudo -S touch /home/${username_server}/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S sed '\$a${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y/d' /etc/sudoers.d/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S sed '\$a${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y' /etc/sudoers.d/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S chown root:root /etc/sudoers.d/${username_server}
-    echo "$passwort_serveruser" | sudo -S chmod 0440 /etc/sudoers.d/${username_server}
+    echo "$passwort_serveruser" | sudo -S touch $HOME/${username_server}_autoupdate
+    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y/d" > $HOME/${username_server}_autoupdate
+    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y" >> $HOME/${username_server}_autoupdate
+    echo "$passwort_serveruser" | sudo -S chown root:root $HOME/${username_server}_autoupdate
+    echo "$passwort_serveruser" | sudo -S chmod 0440 $HOME/${username_server}_autoupdate
+    echo "$passwort_serveruser" | sudo -S cp $HOME/${username_server}_autoupdate /etc/sudoers.d/${username_server}_autoupdate
     exit
 EOF
 
