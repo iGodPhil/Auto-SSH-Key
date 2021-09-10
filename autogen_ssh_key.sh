@@ -228,7 +228,7 @@ EOF
         sudo apt full-upgrade -y
         echo;echo;echo;echo;echo" > ${pfad}/ssh_${servername}.sh
 }
-
+s
 #erstellt auf Wunsch den SSH Schnellzugriff
 #updatet das System auf Wunsch bei Einwahl
 function add_ssh_datei(){
