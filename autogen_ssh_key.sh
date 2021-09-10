@@ -61,7 +61,7 @@ function ssh_copy_id(){
     expect {
       "*assword:*" {
         send "${passwort_serveruser}\r"
-        exp_continue
+#        exp_continue
       }
       eof
     }
@@ -76,7 +76,7 @@ function add_ssh_keymanager(){
     expect {
       "Enter passphrase for*" {
         send "${passwort_sshkey}\r"
-        exp_continue
+#        exp_continue
       }
       eof
     }
@@ -90,7 +90,7 @@ function show_ssh_add_keys(){
           printf "%s %s\n" "$(ssh-keygen -lf "$file" | awk '{$1=""}1')" "$file";
       done | column -t | grep --color=auto "$line" || echo "$line";
   done < <(ssh-add -l | awk '{print $2}')
-  sleep 5
+  sleep 3
 }
 
 #erstellt den SSH-Schlüssel, speichert ihn auf dem Server und im SSH-Schlüsselmanager
@@ -143,7 +143,7 @@ function add_ssh_schluessel(){
 
     ssh $username_server@$ip_adresse bash -s <<-EOF
       echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
-      echo "$passwort_serveruser" | sudo -S sed -i 's/.*PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+      echo "$passwort_serveruser" | sudo -S sed -i '/.*PubkeyAuthentication.*/c\PubkeyAuthentication yes/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i 's/.*LoginGraceTime.*/LoginGraceTime 5m/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i 's/.*MaxAuthTries.*/MaxAuthTries 10/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i '/AllowGroups ssh-user/d' /etc/ssh/sshd_config
@@ -199,9 +199,9 @@ function add_only_ssh_key(){
 
   ssh $username_server@$ip_adresse bash -s <<-EOF
     echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
-    echo "$passwort_serveruser" | sudo -S sed -i 's/.*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-    echo "$passwort_serveruser" | sudo -S sed -i 's/.*ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
-    echo "$passwort_serveruser" | sudo -S sed -i 's/.*UsePAM.*/UsePAM no/' /etc/ssh/sshd_config
+    echo "$passwort_serveruser" | sudo -S sed -i '/.*PasswordAuthentication.*/c\PasswordAuthentication no/' /etc/ssh/sshd_config
+    echo "$passwort_serveruser" | sudo -S sed -i '/.*ChallengeResponseAuthentication.*/c\ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
+    echo "$passwort_serveruser" | sudo -S sed -i '/.*UsePAM.*/c\UsePAM no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S service sshd restart
     exit
 EOF
@@ -245,7 +245,7 @@ function add_ssh_datei(){
     chmod a+x ${pfad}/ssh_${servername}.sh
     echo "ssh ${servername}@${ip_adresse}" > ${pfad}/ssh_${servername}.sh
     echo -e
-    echo "${FETT}Möchtest du dein System bei Einwahl automatisch updaten? (y|n)${RESET}"
+    echo -e "${FETT}Möchtest du dein System bei Einwahl automatisch updaten? (y|n)${RESET}"
     read -rp "Eingabe: "
     if [[ "${abfrage_eingabe}" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
       add_login_update
@@ -380,12 +380,15 @@ function main(){
 
 function log(){
   mkdir ${dir}/logfiles > /dev/null 2>&1
-  exec 3>&1 4>&2
-  trap 'exec 2>&4 1>&3' 0 1 2 3
-  exec 1>${dir}/logfiles/log.out 2>&1
+#  exec 3>&1 4>&2
+#  trap 'exec 2>&4 1>&3' 0 1 2 3
+#  exec 1>${dir}/logfiles/log.out 2>&1
+
+  exec 3>&1 1>>${dir}/logfiles/log.out 2>&1
+
   # Everything below will go to the file 'log.out':
-  echo -e "$(main)" >&3
-  main >&3
+  echo "$(main)" | tee /dev/fd/3
+#  main >&3
 
   if [[ "${betriebssystem}" = "macos" ]]; then
     mv ${dir}/logfiles/log.out ${dir}/logfiles/ssh_einrichtung_${servername}_$(date -j -f %d_%m_%Y-%H_%M_%S).log
