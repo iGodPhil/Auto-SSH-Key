@@ -44,10 +44,12 @@ function ssh_fingerprint() {
     spawn ssh ${username_server}@${ip_adresse} -t 'exit'
     expect {
       "*fingerprint*" {
-        send "yes\r"; exp_continue
+        send "yes\r";
+        exp_continue
       }
       "*assword:*" {
         send "${passwort_serveruser}\r"
+        exp_continue
       }
       eof
     }
@@ -61,7 +63,7 @@ function ssh_copy_id(){
     expect {
       "*assword:*" {
         send "${passwort_serveruser}\r"
-#        exp_continue
+        exp_continue
       }
       eof
     }
@@ -112,13 +114,13 @@ function show_ssh_add_keys(){
 
 #erstellt den SSH-Schlüssel, speichert ihn auf dem Server und im SSH-Schlüsselmanager
 #passt die Recht der nötigen Verzeichnisse an
-function add_ssh_schluessel(){
-	if [[ "$betriebssystem" =~ (macos|linux) ]]; then
+function add_ssh_schluessel() {
+  if [[ "$betriebssystem" =~ (macos|linux) ]]; then
     absatz
-		echo $passwort_user | sudo -S chmod 755 $HOME/.ssh
+    echo $passwort_user | sudo -S chmod 755 $HOME/.ssh
     echo -e
     echo -e "Wir erstellen jetzt das SSH-Schlüsselpaar..."
-		echo -e "${FETT}Wie soll das Passwort für den SSH-Key lauten?${RESET}"
+    echo -e "${FETT}Wie soll das Passwort für den SSH-Key lauten?${RESET}"
     read -srp "Eingabe: " passwort_sshkey
     echo -e
     echo -e
@@ -162,12 +164,12 @@ function add_ssh_schluessel(){
       ssh $username_server@$ip_adresse bash -s <<-EOF
         echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -j -f %d_%m_%Y-%H_%M_%S).bak
         exit
-  EOF
-    elif [[ "$betriebssystem" = "linux" ]]; then
+EOF
+    elif [[ "${betriebssystem}" = "linux" ]]; then
       ssh $username_server@$ip_adresse bash -s <<-EOF
         echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
         exit
-  EOF
+EOF
     else
       echo "Windows ist noch nicht fertig."
     fi
@@ -215,7 +217,7 @@ EOF
   elif [[ "$betriebssystem" = 'windows' ]]; then
     echo -e "Das Skript für Windows ist noch nicht fertig."
     sleep 5
-	fi
+  fi
 }
 
 ##############################################################################################################################
