@@ -49,6 +49,7 @@ function ssh_fingerprint() {
       }
       "*assword:*" {
         send "${passwort_serveruser}\r"
+        send "${passwort_serveruser}\r";
         exp_continue
       }
       eof
@@ -165,7 +166,7 @@ function add_ssh_schluessel() {
         echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -j -f %d_%m_%Y-%H_%M_%S).bak
         exit
 EOF
-    elif [[ "${betriebssystem}" = "linux" ]]; then
+    elif [[ "$betriebssystem" = "linux" ]]; then
       ssh $username_server@$ip_adresse bash -s <<-EOF
         echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
         exit
@@ -265,18 +266,15 @@ EOF
 #bei login Update ermöglichen
 function add_login_update(){
   ssh $username_server@$ip_adresse bash -s <<-EOF
-    echo "$passwort_serveruser" | sudo -S touch $HOME/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y/d" > $HOME/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:\/usr\/bin\/apt update,\/usr\/bin\/apt full-upgrade -y" >> $HOME/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S chown root:root $HOME/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S chmod 0440 $HOME/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S cp $HOME/${username_server}_autoupdate /etc/sudoers.d/${username_server}_autoupdate
+    echo "$passwort_serveruser" | sudo -S touch /etc/sudoers.d/${username_server}_autoupdate
+    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:/usr/bin/apt update,/usr/bin/apt full-upgrade -y" | (sudo su -c 'EDITOR="tee" visudo -f /etc/sudoers.d/${username_server}_autoupdate')
     exit
 EOF
-
-  echo "sudo apt update
-        sudo apt full-upgrade -y
-        echo;echo;echo;echo;echo" > ${pfad}/ssh_${servername}.sh
+  echo "ssh ${servername}@${ip_adresse} bash -s <<-EOF" > ${pfad}/ssh_${servername}.sh
+  echo "sudo apt update" >> ${pfad}/ssh_${servername}.sh
+  echo "sudo apt full-upgrade -y" >> ${pfad}/ssh_${servername}.sh
+  echo "echo;echo;echo;echo;echo" >> ${pfad}/ssh_${servername}.sh
+  echo "EOF" >> ${pfad}/ssh_${servername}.sh
 }
 
 #erstellt auf Wunsch den SSH Schnellzugriff
@@ -293,8 +291,9 @@ function add_ssh_datei(){
     touch ${pfad}/ssh_${servername}.sh
     chmod a+x ${pfad}/ssh_${servername}.sh
     echo "ssh ${servername}@${ip_adresse}" > ${pfad}/ssh_${servername}.sh
+    echo "$passwort_user" | sudo -S chmod +x ${pfad}/ssh_${servername}.sh
     echo -e
-    echo -e "${FETT}Möchtest du dein System bei Einwahl automatisch updaten? (y|n)${RESET}"
+    echo -e "${FETT}Möchtest du deinen Server bei Einwahl automatisch updaten? (y|n)${RESET}"
     read -rp "Eingabe: "
     if [[ "${abfrage_eingabe}" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
       add_login_update
@@ -425,5 +424,4 @@ function main(){
 }
 
 #Aufruf des Programms
-
 main
