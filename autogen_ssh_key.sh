@@ -324,8 +324,6 @@ function main(){
   echo -e "Das Skript erstellt ein neues SSH-Schlüsselpaar, damit du dich zukünftig ohne Passwort auf deinem Server anmelden kannst."
   echo -e "Das Passwort für den SSH-Schlüssel wird im SSH-Schlüsselmanager gespeichert."
   echo -e "Auf Wunsch wird ein Schnellzugriff auf deinen Server erstellt."
-  echo -e "Die Ausgaben des Skripts werden in einem Logfile gespeichert."
-  echo -e "${FETT}${ROT}Alle Passwörter die im Klartext angezeigt werden, werden im Logfile zu sehen sein!${RESET}"
   echo -e
   echo -e "${FETT}${ROT}Dein User auf dem Server muss der Gruppe sudo angehören!${RESET}"
   echo -e
@@ -419,33 +417,11 @@ function main(){
   #Ende
   echo -e
   echo -e "Wir sind jetzt fertig. Ab jetzt kannst du dich sicher ohne Passwort auf deinem Server anmelden."
-  echo -e "Das Logfile für den Einrichtungsprozess findest du im log-Ordner deines Skripts."
   echo -e "Ciao..."
 
   exit 0
 }
 
-function log(){
-  mkdir ${dir}/logfiles > /dev/null 2>&1
-#  exec 3>&1 4>&2
-#  trap 'exec 2>&4 1>&3' 0 1 2 3
-#  exec 1>${dir}/logfiles/log.out 2>&1
-
-  exec 3>&1 1>>${dir}/logfiles/log.out 2>&1
-
-  # Everything below will go to the file 'log.out':
-  echo "$(main)" | tee /dev/fd/3
-#  main >&3
-
-  if [[ "${betriebssystem}" = "macos" ]]; then
-    mv ${dir}/logfiles/log.out ${dir}/logfiles/ssh_einrichtung_${servername}_$(date -j -f %d_%m_%Y-%H_%M_%S).log
-  elif [[ "$betriebssystem" = "linux" ]]; then
-    mv ${dir}/logfiles/log.out ${dir}/logfiles/ssh_einrichtung_${servername}_$(date -Is).log
-  else
-    echo "Windows ist noch nicht fertig."
-  fi
-}
-
 #Aufruf des Programms
-#log
+
 main
