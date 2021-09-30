@@ -11,7 +11,7 @@ ROT='\033[31m'
 RESET='\033[00m'
 
 #Formatierung für neuen Absatz einfügen
-absatz(){
+function absatz(){
   echo -e
   echo -e
   echo -e "${FETT}#############################################################################${RESET}"
@@ -19,7 +19,7 @@ absatz(){
   echo -e
 }
 
-#globale Variablen
+#Variablen
 betriebssystem=''
 pfad=''
 username=''
@@ -27,6 +27,7 @@ username_server=''
 passwort_user=''
 passwort_serveruser=''
 passwort_sshkey=''
+pw=''
 servername=''
 ip_adresse=''
 abfrage_eingabe=''
@@ -48,7 +49,6 @@ function ssh_fingerprint() {
         exp_continue
       }
       "*assword:*" {
-        send "${passwort_serveruser}\r"
         send "${passwort_serveruser}\r";
         exp_continue
       }
@@ -161,14 +161,9 @@ function add_ssh_schluessel() {
 
     echo -e "Wir melden uns jetzt auf dem Server an und passen die sshd_config Datei an, um die SSH-Einwahl am Server abzusichern..."
 
-    if [[ "${betriebssystem}" = "macos" ]]; then
+    if [[ "${betriebssystem}" =~ (macos|linux) ]]; then
       ssh $username_server@$ip_adresse bash -s <<-EOF
-        echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -j -f %d_%m_%Y-%H_%M_%S).bak
-        exit
-EOF
-    elif [[ "$betriebssystem" = "linux" ]]; then
-      ssh $username_server@$ip_adresse bash -s <<-EOF
-        echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
+        echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date +"%d-%m-%y_%H:%M:%S").bak
         exit
 EOF
     else
@@ -191,7 +186,7 @@ EOF
       echo "$passwort_serveruser" | sudo -S service sshd restart
       exit
 EOF
-
+    echo -e
     echo -e "Ab sofort können sich nur noch User auf deinem Server der Gruppe ssh-user anmelden. $username_server wurde automatisch zur Gruppe hinzugefügt."
     abfrage_eingabe='y'
     while [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; do
@@ -231,14 +226,9 @@ EOF
 function add_only_ssh_key(){
   echo -e "Wir verbinden uns wieder mit dem Server und passen erneut die sshd_config Datei an."
 
-  if [[ "${betriebssystem}" = "macos" ]]; then
+  if [[ "${betriebssystem}" =~ (macos|linux) ]]; then
     ssh $username_server@$ip_adresse bash -s <<-EOF
-      echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -j -f %d_%m_%Y-%H_%M_%S).bak
-      exit
-EOF
-  elif [[ "$betriebssystem" = "linux" ]]; then
-    ssh $username_server@$ip_adresse bash -s <<-EOF
-      echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date -Is).bak
+      echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date +"%d-%m-%y_%H:%M:%S").bak
       exit
 EOF
   else
@@ -264,19 +254,69 @@ EOF
 ##############################################################################################################################
 
 #bei login Update ermöglichen
-function add_login_update(){
+function add_serverupdate_login(){
   ssh $username_server@$ip_adresse bash -s <<-EOF
     echo "$passwort_serveruser" | sudo -S touch /etc/sudoers.d/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:/usr/bin/apt update,/usr/bin/apt full-upgrade -y" | (sudo su -c 'EDITOR="tee" visudo -f /etc/sudoers.d/${username_server}_autoupdate')
+    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:/usr/bin/apt update,/usr/bin/apt full-upgrade -y" | (sudo su -c 'EDITOR="tee" visudo -f /etc/sudoers.d/${username_server}_autoupdate') > /dev/null
     exit
 EOF
-  echo "ssh ${servername}@${ip_adresse} bash -s <<-EOF" > ${pfad}/ssh_${servername}.sh
-  echo "sudo apt update" >> ${pfad}/ssh_${servername}.sh
-  echo "sudo apt full-upgrade -y" >> ${pfad}/ssh_${servername}.sh
-  echo "echo;echo;echo;echo;echo" >> ${pfad}/ssh_${servername}.sh
-  echo "EOF" >> ${pfad}/ssh_${servername}.sh
 }
 
+#liest die beiden Variablen für die Update Datei ein
+function var_einlesen() {
+  pw=$(echo "${passwort_serveruser}" | base64)
+
+  server_schnelleinwahl=$(echo "#!/usr/bin/env bash
+  eval \$(ssh-agent -s)
+
+  PW='${pw}'
+  PW=\$(echo \"\${PW}\" | base64 -d)
+
+  expect <<- EOF
+    spawn ssh-add \$HOME/.ssh/${servername}_rsa
+    expect {
+      \"Enter passphrase for*\" {
+        send \"\${PW}\r\"
+        exp_continue
+      }
+      eof
+    }
+EOF
+
+  ssh ${username_server}@${ip_adresse}
+
+  exit 0")
+
+  server_updateschnelleinwahl=$(echo "#!/usr/bin/env bash
+  eval \$(ssh-agent -s)
+
+  PW='${pw}'
+  PW=\$(echo \"\${PW}\" | base64 -d)
+
+  expect <<- EOF
+    spawn ssh-add \$HOME/.ssh/${servername}_rsa
+    expect {
+      \"Enter passphrase for*\" {
+        send \"\${PW}\r\"
+        exp_continue
+      }
+      eof
+    }
+EOF
+
+  ssh test@10.0.30.200 bash -s <<-EOF
+    echo;echo;echo;echo;echo
+    echo \"Wir führen jetzt das Update durch...\"; echo ; sudo apt update 2>/dev/null
+    echo;echo;echo;echo;echo
+    echo \"Wir führen jetzt das Upgrade durch...\"; echo ; sudo apt full-upgrade -y 2>/dev/null
+    echo;echo;echo;echo;echo
+    exit
+EOF
+
+  ssh ${username_server}@${ip_adresse}
+
+  exit 0")
+}
 #erstellt auf Wunsch den SSH Schnellzugriff
 #updatet das System auf Wunsch bei Einwahl
 function add_ssh_datei(){
@@ -288,16 +328,20 @@ function add_ssh_datei(){
     echo -e
     echo -e "${FETT}Wo möchtest du den Schnellzugriff ablegen?${RESET}"
     read -rp "Gib den kompletten Pfad an: " pfad
+    var_einlesen
     touch ${pfad}/ssh_${servername}.sh
-    chmod a+x ${pfad}/ssh_${servername}.sh
-    echo "ssh ${servername}@${ip_adresse}" > ${pfad}/ssh_${servername}.sh
-    echo "$passwort_user" | sudo -S chmod +x ${pfad}/ssh_${servername}.sh
+    echo "$passwort_user" | sudo -S chmod 766 ${pfad}/ssh_${servername}.sh
+    echo "${server_schnelleinwahl}" > ${pfad}/ssh_${servername}.sh
     echo -e
     echo -e "${FETT}Möchtest du deinen Server bei Einwahl automatisch updaten? (y|n)${RESET}"
     read -rp "Eingabe: "
     if [[ "${abfrage_eingabe}" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
-      add_login_update
+      add_serverupdate_login
+      echo "${server_updateschnelleinwahl}" > ${pfad}/ssh_${servername}.sh
     fi
+    echo "$passwort_user" | sudo -S sed -i '' 's/^[[:space:]]//g' ${pfad}/ssh_${servername}.sh
+    echo "$passwort_user" | sudo -S sed -i '' 's/^[[:space:]]//g' ${pfad}/ssh_${servername}.sh
+    echo "$passwort_user" | sudo -S chmod 700 ${pfad}/ssh_${servername}.sh
   fi
 }
 
@@ -416,6 +460,7 @@ function main(){
   fi
 
   #Ende
+  echo -e
   echo -e
   echo -e "Wir sind jetzt fertig. Ab jetzt kannst du dich sicher ohne Passwort auf deinem Server anmelden."
   echo -e "Ciao..."
