@@ -163,7 +163,7 @@ function add_ssh_schluessel() {
 
     if [[ "${betriebssystem}" =~ (macos|linux) ]]; then
       ssh $username_server@$ip_adresse bash -s <<-EOF
-        echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date +"%d-%m-%y_%H:%M:%S").bak
+        echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date +\"%d-%m-%y_%H:%M:%S\").bak
         exit
 EOF
     else
@@ -304,7 +304,7 @@ EOF
     }
 EOF
 
-  ssh test@10.0.30.200 bash -s <<-EOF
+  ssh ${username_server}@${ip_adresse} bash -s <<-EOF
     echo;echo;echo;echo;echo
     echo \"Wir führen jetzt das Update durch...\"; echo ; sudo apt update 2>/dev/null
     echo;echo;echo;echo;echo
