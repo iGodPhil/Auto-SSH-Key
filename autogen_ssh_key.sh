@@ -75,6 +75,8 @@ EOF
 #speichert das Passwort des SSH-Schlüssels im SSH-Manager
 function add_ssh_keymanager(){
 
+  ssh-add -d ${HOME}/.ssh/${servername}_rsa.pub
+
   if [[ "${betriebssystem}" = "macos" ]]; then
     expect <<- EOF
       spawn ssh-add -K ${HOME}/.ssh/${servername}_rsa
@@ -257,54 +259,31 @@ EOF
 function add_serverupdate_login(){
   ssh $username_server@$ip_adresse bash -s <<-EOF
     echo "$passwort_serveruser" | sudo -S touch /etc/sudoers.d/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:/usr/bin/apt update,/usr/bin/apt full-upgrade -y" | (sudo su -c 'EDITOR="tee" visudo -f /etc/sudoers.d/${username_server}_autoupdate') > /dev/null
+    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:/usr/bin/apt update,/usr/bin/apt full-upgrade -y,/usr/bin/apt autoremove -y" | (sudo su -c 'EDITOR="tee" visudo -f /etc/sudoers.d/${username_server}_autoupdate') > /dev/null
     exit
 EOF
 }
 
 #liest die beiden Variablen für die Update Datei ein
 function var_einlesen() {
-  pw=$(echo "${passwort_serveruser}" | base64)
+
+  ssh_config=$(echo "\#Das sind die Credentials für deinen ${servername}-Server:
+  Host ${servername}
+  User ${username_server}
+  Port 22
+  HostName ${ip_adresse}
+  IdentityFile ${HOME}/.ssh/${servername}_rsa
+  ")
 
   server_schnelleinwahl=$(echo "#!/usr/bin/env bash
-  eval \$(ssh-agent -s)
 
-  PW='${pw}'
-  PW=\$(echo \"\${PW}\" | base64 -d)
-
-  expect <<- EOF
-    spawn ssh-add \$HOME/.ssh/${servername}_rsa
-    expect {
-      \"Enter passphrase for*\" {
-        send \"\${PW}\r\"
-        exp_continue
-      }
-      eof
-    }
-EOF
-
-  ssh ${username_server}@${ip_adresse}
+  ssh ${username_server}
 
   exit 0")
 
   server_updateschnelleinwahl=$(echo "#!/usr/bin/env bash
-  eval \$(ssh-agent -s)
 
-  PW='${pw}'
-  PW=\$(echo \"\${PW}\" | base64 -d)
-
-  expect <<- EOF
-    spawn ssh-add \$HOME/.ssh/${servername}_rsa
-    expect {
-      \"Enter passphrase for*\" {
-        send \"\${PW}\r\"
-        exp_continue
-      }
-      eof
-    }
-EOF
-
-  ssh ${username_server}@${ip_adresse} bash -s <<-EOF
+  ssh ${username_server} bash -s <<-EOF
     echo;echo;echo;echo;echo
     echo \"Wir führen jetzt das Update durch...\"; echo ; sudo apt update 2>/dev/null
     echo;echo;echo;echo;echo
@@ -313,7 +292,7 @@ EOF
     exit
 EOF
 
-  ssh ${username_server}@${ip_adresse}
+  ssh ${username_server}
 
   exit 0")
 }
@@ -326,6 +305,11 @@ function add_ssh_datei(){
   read -rp "Eingabe: " abfrage_eingabe
   if [[ "${abfrage_eingabe}" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
     echo -e
+    touch ${HOME}/.ssh/config
+    echo "${ssh_config}" >> ${HOME}/.ssh/config
+    echo "${FETT}${ROT}Du kannst dich ab sofort von deinem System mit \"ssh ${servername}\" auf deinem Server anmelden!${RESET}"
+    sleep 5
+    echo -e 
     echo -e "${FETT}Wo möchtest du den Schnellzugriff ablegen?${RESET}"
     read -rp "Gib den kompletten Pfad an: " pfad
     var_einlesen
