@@ -75,6 +75,8 @@ EOF
 #speichert das Passwort des SSH-Schlüssels im SSH-Manager
 function add_ssh_keymanager(){
 
+  ssh-add -d ${HOME}/.ssh/${servername}_rsa.pub
+
   if [[ "${betriebssystem}" = "macos" ]]; then
     expect <<- EOF
       spawn ssh-add -K ${HOME}/.ssh/${servername}_rsa
