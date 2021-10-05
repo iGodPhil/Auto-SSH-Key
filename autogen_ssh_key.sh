@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+#Version: 1.1
 #Dieses Skript erstellt auf Wunsch ein neues SSH Schlüsselpaar
 #das Passwort wird automatisch im SSH Schlüsselmanager gespeichert
 #der Publik Key wird zum Server übertragen
@@ -19,25 +19,67 @@ function absatz(){
   echo -e
 }
 
-#Variablen
-betriebssystem=''
-pfad=''
-username=''
-username_server=''
-passwort_user=''
-passwort_serveruser=''
-passwort_sshkey=''
-pw=''
-servername=''
-ip_adresse=''
-abfrage_eingabe=''
-dir=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+#liest alle Variablen nach der Benutzereingabe ein
+function var_einlesen() {
+
+  dir=$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+  ssh_config_datei="$(cat ${HOME}/.ssh/config)"
+  anzahl_zeilen="$(cat ${HOME}/.ssh/config | wc -l)"
+  gesuchter_server=".*${servername}-Server.*"
+
+  ssh_config=$(echo "#Das sind die Credentials für deinen ${servername}-Server:
+  Host ${servername}
+  User ${username_server}
+  Port 22
+  HostName ${ip_adresse}
+  IdentityFile ${HOME}/.ssh/${servername}_rsa
+  ")
+
+  server_schnelleinwahl=$(echo "#!/usr/bin/env bash
+
+  ssh ${username_server}
+
+  exit 0")
+
+  server_updateschnelleinwahl=$(echo "#!/usr/bin/env bash
+
+  ssh ${username_server} bash -s <<-EOF
+    echo;echo;echo;echo;echo
+    echo \"Wir führen jetzt das Update durch...\"; echo ; sudo apt update 2>/dev/null
+    echo;echo;echo;echo;echo
+    echo \"Wir führen jetzt das Upgrade durch...\"; echo ; sudo apt full-upgrade -y 2>/dev/null
+    echo;echo;echo;echo;echo
+    echo \"Wir räumen jetzt auf und entfernen alle nicht mehr benötigten Bibliotheken...\"; echo ; sudo apt autoremove -y 2>/dev/null
+    echo;echo;echo;echo;echo
+    exit
+EOF
+
+  ssh ${username_server}
+
+  exit 0")
+}
 
 ##############################################################################################################################
 
 #SSH Funktionen auf dem Client
 
 ##############################################################################################################################
+
+#erstellt / bearbeitet die ssh config Datei : $HOME/.ssh/config
+function ssh_config_datei_bearbeiten() {
+  touch ${HOME}/.ssh/config
+  for (( i = 1; i < $(expr ${anzahl_zeilen} + 1) ; i++ )); do
+    zeileninhalt=$(echo "$ssh_config_datei" | sed -n "${i}p")
+    if [[ ${zeileninhalt} =~ ${gesuchter_server} ]]; then
+      sed -i -e "${i},$(expr ${i} + 6)d" ${HOME}/.ssh/config
+      break
+    fi
+    if [[ $i = ${anzahl_zeilen} ]]; then
+      echo -e "Es war bisher kein Eintrag für deinen Server vorhanden. Daher wurde wurde die config Datei nicht verändert."
+    fi
+  done
+  echo "${ssh_config}" >> ${HOME}/.ssh/config
+}
 
 #speichert den Fingerprint des Servers auf dem Client
 function ssh_fingerprint() {
@@ -126,7 +168,7 @@ function add_ssh_schluessel() {
     echo -e
     echo -e
 
-
+    ssh-add -d ${HOME}/.ssh/${servername}_rsa 2>/dev/null
     ssh-keygen -b 4096 -N $passwort_sshkey -f $HOME/.ssh/${servername}_rsa
     echo -e
     echo -e "Du besitzt bisher folgende SSH-Schlüssel:"
@@ -162,7 +204,7 @@ function add_ssh_schluessel() {
     echo -e "Wir melden uns jetzt auf dem Server an und passen die sshd_config Datei an, um die SSH-Einwahl am Server abzusichern..."
 
     if [[ "${betriebssystem}" =~ (macos|linux) ]]; then
-      ssh $username_server@$ip_adresse bash -s <<-EOF
+      ssh $username_server bash -s <<-EOF
         echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date +\"%d-%m-%y_%H:%M:%S\").bak
         exit
 EOF
@@ -170,7 +212,7 @@ EOF
       echo "Windows ist noch nicht fertig."
     fi
 
-    ssh $username_server@$ip_adresse bash -s <<-EOF
+    ssh $username_server bash -s <<-EOF
       echo "$passwort_serveruser" | sudo -S sed -i '/.*PubkeyAuthentication.*/c\PubkeyAuthentication yes/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i '0,/.*PubkeyAuthentication.*/s//PubkeyAuthentication yes/' /etc/ssh/sshd_config
       echo "$passwort_serveruser" | sudo -S sed -i 's/.*LoginGraceTime.*/LoginGraceTime 5m/' /etc/ssh/sshd_config
@@ -189,12 +231,12 @@ EOF
     echo -e
     echo -e "Ab sofort können sich nur noch User auf deinem Server der Gruppe ssh-user anmelden. $username_server wurde automatisch zur Gruppe hinzugefügt."
     abfrage_eingabe='y'
-    while [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; do
+    while [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]] || [[ "$abfrage_eingabe" == "" ]]; do
       echo -e "${FETT}Möchtest du noch weitere User zur Gruppe ssh-user hinzufügen? (y|n)${RESET}"
       read -rp "Eingabe: " abfrage_eingabe
-      if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
+      if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]] || [[ "$abfrage_eingabe" == "" ]]; then
         read -rp "Username: " eingabe_username
-        ssh $username_server@$ip_adresse bash -s <<-EOF
+        ssh $username_server bash -s <<-EOF
           echo $passwort_serveruser | sudo -S usermod -aG ssh-user $eingabe_username
           exit
 EOF
@@ -206,7 +248,7 @@ EOF
     echo -e
     echo -e "${FETT}Möchtest du dich zukünftig nur noch mit einem öffentlichen Schlüssel anmelden können? (y|n)${RESET}"
     read -rp "Eingabe: " abfrage_eingabe
-    if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
+    if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]] || [[ "$abfrage_eingabe" == "" ]]; then
       add_only_ssh_key
     fi
 
@@ -227,7 +269,7 @@ function add_only_ssh_key(){
   echo -e "Wir verbinden uns wieder mit dem Server und passen erneut die sshd_config Datei an."
 
   if [[ "${betriebssystem}" =~ (macos|linux) ]]; then
-    ssh $username_server@$ip_adresse bash -s <<-EOF
+    ssh $username_server bash -s <<-EOF
       echo "$passwort_serveruser" | sudo -S cp /etc/ssh/sshd_config /etc/ssh/sshd_config_$(date +"%d-%m-%y_%H:%M:%S").bak
       exit
 EOF
@@ -235,7 +277,7 @@ EOF
     echo "Windows ist noch nicht fertig."
   fi
 
-  ssh $username_server@$ip_adresse bash -s <<-EOF
+  ssh $username_server bash -s <<-EOF
     echo "$passwort_serveruser" | sudo -S sed -i '/.*PasswordAuthentication.*/c\PasswordAuthentication no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S sed -i '/.*ChallengeResponseAuthentication.*/c\ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
     echo "$passwort_serveruser" | sudo -S sed -i '/.*UsePAM.*/c\UsePAM no/' /etc/ssh/sshd_config
@@ -255,68 +297,13 @@ EOF
 
 #bei login Update ermöglichen
 function add_serverupdate_login(){
-  ssh $username_server@$ip_adresse bash -s <<-EOF
+  ssh $username_server bash -s <<-EOF
     echo "$passwort_serveruser" | sudo -S touch /etc/sudoers.d/${username_server}_autoupdate
-    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:/usr/bin/apt update,/usr/bin/apt full-upgrade -y" | (sudo su -c 'EDITOR="tee" visudo -f /etc/sudoers.d/${username_server}_autoupdate') > /dev/null
+    echo "$passwort_serveruser" | sudo -S echo "${username_server} ALL=NOPASSWD:/usr/bin/apt update,/usr/bin/apt full-upgrade -y,/usr/bin/apt autoremove -y" | (sudo su -c 'EDITOR="tee" visudo -f /etc/sudoers.d/${username_server}_autoupdate') > /dev/null
     exit
 EOF
 }
 
-#liest die beiden Variablen für die Update Datei ein
-function var_einlesen() {
-  pw=$(echo "${passwort_serveruser}" | base64)
-
-  server_schnelleinwahl=$(echo "#!/usr/bin/env bash
-  eval \$(ssh-agent -s)
-
-  PW='${pw}'
-  PW=\$(echo \"\${PW}\" | base64 -d)
-
-  expect <<- EOF
-    spawn ssh-add \$HOME/.ssh/${servername}_rsa
-    expect {
-      \"Enter passphrase for*\" {
-        send \"\${PW}\r\"
-        exp_continue
-      }
-      eof
-    }
-EOF
-
-  ssh ${username_server}@${ip_adresse}
-
-  exit 0")
-
-  server_updateschnelleinwahl=$(echo "#!/usr/bin/env bash
-  eval \$(ssh-agent -s)
-
-  PW='${pw}'
-  PW=\$(echo \"\${PW}\" | base64 -d)
-
-  expect <<- EOF
-    spawn ssh-add \$HOME/.ssh/${servername}_rsa
-    expect {
-      \"Enter passphrase for*\" {
-        send \"\${PW}\r\"
-        exp_continue
-      }
-      eof
-    }
-EOF
-
-  ssh ${username_server}@${ip_adresse} bash -s <<-EOF
-    echo;echo;echo;echo;echo
-    echo \"Wir führen jetzt das Update durch...\"; echo ; sudo apt update 2>/dev/null
-    echo;echo;echo;echo;echo
-    echo \"Wir führen jetzt das Upgrade durch...\"; echo ; sudo apt full-upgrade -y 2>/dev/null
-    echo;echo;echo;echo;echo
-    exit
-EOF
-
-  ssh ${username_server}@${ip_adresse}
-
-  exit 0")
-}
 #erstellt auf Wunsch den SSH Schnellzugriff
 #updatet das System auf Wunsch bei Einwahl
 function add_ssh_datei(){
@@ -324,24 +311,34 @@ function add_ssh_datei(){
   echo -e
   echo -e "${FETT}Möchtest du einen Schnellzugriff für deinen Server anlegen? (y|n)${RESET}"
   read -rp "Eingabe: " abfrage_eingabe
-  if [[ "${abfrage_eingabe}" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
+  if [[ "${abfrage_eingabe}" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]] || [[ "$abfrage_eingabe" == "" ]]; then
+    echo -e
+    echo -e "${FETT}${ROT}Du kannst dich ab sofort von deinem System mit dem Befehl \"ssh ${servername}\" auf deinem Server anmelden!${RESET}"
+    sleep 3
     echo -e
     echo -e "${FETT}Wo möchtest du den Schnellzugriff ablegen?${RESET}"
     read -rp "Gib den kompletten Pfad an: " pfad
-    var_einlesen
     touch ${pfad}/ssh_${servername}.sh
     echo "$passwort_user" | sudo -S chmod 766 ${pfad}/ssh_${servername}.sh
     echo "${server_schnelleinwahl}" > ${pfad}/ssh_${servername}.sh
     echo -e
     echo -e "${FETT}Möchtest du deinen Server bei Einwahl automatisch updaten? (y|n)${RESET}"
     read -rp "Eingabe: "
-    if [[ "${abfrage_eingabe}" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
+    if [[ "${abfrage_eingabe}" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]] || [[ "$abfrage_eingabe" == "" ]]; then
       add_serverupdate_login
       echo "${server_updateschnelleinwahl}" > ${pfad}/ssh_${servername}.sh
     fi
     echo "$passwort_user" | sudo -S sed -i '' 's/^[[:space:]]//g' ${pfad}/ssh_${servername}.sh
     echo "$passwort_user" | sudo -S sed -i '' 's/^[[:space:]]//g' ${pfad}/ssh_${servername}.sh
     echo "$passwort_user" | sudo -S chmod 700 ${pfad}/ssh_${servername}.sh
+  else
+    anzahl_zeilen="$(cat ${HOME}/.ssh/config | wc -l)"
+    for (( i = 1; i < $(expr ${anzahl_zeilen} + 1) ; i++ )); do
+      zeileninhalt=$(echo "$ssh_config_datei" | sed -n "${i}p")
+      if [[ ${zeileninhalt} =~ ${gesuchter_server} ]]; then
+        sed -i -e "${i},$(expr ${i} + 6)d" ${HOME}/.ssh/config
+      fi
+    done
   fi
 }
 
@@ -363,6 +360,18 @@ function eingabe_basisdaten(){
   esac
 }
 
+function ausgabe_basisdaten() {
+  case "$*" in
+    1)    echo -e "IP-Adresse: $ip_adresse" ;;
+    2)    echo -e "Servername: $servername" ;;
+    3)    echo -e "Username auf dem Server: $username_server" ;;
+    4)    echo -e "Betriebssystem: $betriebssystem" ;;
+    5)    echo -e "Dein lokaler Username: $username" ;;
+    6)    echo -e "Dein lokales Passwort: $passwort_user" ;;
+    7)    echo -e "Dein Server Passwort: $passwort_serveruser" ;;
+  esac
+}
+
 #Hauptprogramm
 function main(){
   absatz
@@ -374,9 +383,7 @@ function main(){
   echo -e
   echo -e "Kann es losgehen? (y|n)"
   read -rp "Eingabe: " abfrage_eingabe
-  if [[ "${abfrage_eingabe}" =~  (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
-    continue > /dev/null 2>&1
-  else
+  if ! [[ "${abfrage_eingabe}" =~  (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]] && ! [[ "$abfrage_eingabe" == "" ]]; then
     echo -e "Ciao bis zum nächsten Mal..."
     exit 0
   fi
@@ -422,44 +429,50 @@ function main(){
   	read -rp "Username auf deinem Betriebssystem: " username
   done
 
-  #Überprüfung ob der User alle Daten richtig eingegeben hat
-  echo -e
-  echo -e "${FETT}Überprüfe bitte alle Daten bevor es weitergeht:${RESET}"
-  echo -e "IP-Adresse: $ip_adresse"
-  echo -e "Servername: $servername"
-  echo -e "Username auf dem Server: $username_server"
-  echo -e "Betriebssystem: $betriebssystem"
-  echo -e "Dein lokaler Username: $username"
-  echo -e
-  echo -e "${FETT}${ROT}Möchtest du deine Passwörter im Klartext anzeigen lassen? (y|n)${RESET}"
-  read -rp "Eingabe: " abfrage_eingabe
-  if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
-    echo -e
-    echo -e "Dein lokales Passwort: $passwort_user"
-    echo -e "Dein Server Passwort: $passwort_serveruser"
-  fi
-  echo -e
-  echo -e "${FETT}Stimmen deine Eingaben? (y|n)${RESET}"
-  read -rp "Eingabe: " abfrage_eingabe
+  abfrage_eingabe=1
 
-  #Einrichtung der gewünschten Sachen
-  if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]]; then
-    add_ssh_schluessel
-    add_ssh_datei
-  else
-    abfrage_eingabe=1
-    while (( ${abfrage_eingabe} )); do
+  while ! [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]] || [[ "$abfrage_eingabe" == "" ]]; do
+    #Überprüfung ob der User alle Daten richtig eingegeben hat
+    echo -e
+    echo -e "${FETT}Überprüfe bitte alle Daten bevor es weitergeht:${RESET}"
+    for (( i = 1; i < 6; i++ )); do
+      ausgabe_basisdaten $i
+    done
+    echo -e
+    echo -e
+    echo -e "${FETT}${ROT}Möchtest du deine Passwörter im Klartext anzeigen lassen? (y|n)${RESET}"
+    read -rp "Eingabe: " abfrage_eingabe
+    if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]] || [[ "$abfrage_eingabe" == "" ]]; then
+      echo -e
+      for (( i = 6; i < 8; i++ )); do
+        ausgabe_basisdaten $i
+      done
+    fi
+    echo -e
+    echo -e "${FETT}Stimmen deine Eingaben? (y|n)${RESET}"
+    read -rp "Eingabe: " abfrage_eingabe
+
+    if [[ "$abfrage_eingabe" =~ (y|Y|yes|Yes|yEs|yeS|YEs|yES|YES) ]] || [[ "$abfrage_eingabe" == "" ]]; then
+      break
+    fi
+
+    abfrage_fehlerpunkt=1
+
+    while (( ${abfrage_fehlerpunkt} )); do
+      echo -e
       echo -e "${FETT}Welchen Punkt möchtest du überarbeiten? (1-7 | 0 zum beenden)${RESET}"
-      read -rp "Eingabe: " abfrage_eingabe
-      if (( ${abfrage_eingabe} )); then
-        eingabe_basisdaten ${abfrage_eingabe}
+      read -rp "Eingabe: " abfrage_fehlerpunkt
+      if (( ${abfrage_fehlerpunkt} )); then
+        eingabe_basisdaten ${abfrage_fehlerpunkt}
       fi
     done
-    add_ssh_schluessel
-    add_ssh_datei
-  fi
+  done
 
-  #Ende
+  #Einrichtung der gewünschten Sachen
+  var_einlesen
+  ssh_config_datei_bearbeiten
+  add_ssh_schluessel
+  add_ssh_datei
   echo -e
   echo -e
   echo -e "Wir sind jetzt fertig. Ab jetzt kannst du dich sicher ohne Passwort auf deinem Server anmelden."
